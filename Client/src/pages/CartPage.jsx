@@ -1,145 +1,203 @@
 import React, { useState } from 'react';
-    import { Link, useNavigate } from 'react-router-dom';
-    import { motion, AnimatePresence } from 'framer-motion';
-    import { Helmet } from 'react-helmet';
-    import { useCart } from '@/contexts/CartContext';
-    import { Button } from '@/components/ui/button';
-    import { Input } from '@/components/ui/input';
-    import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-    import { Trash2, Plus, Minus, ShoppingBag, ArrowLeft } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Helmet } from 'react-helmet';
+import { useCart } from '@/contexts/CartContext';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Trash2, Plus, Minus, ShoppingBag, ArrowLeft } from 'lucide-react';
 
-    const CartPage = () => {
-      const { cartItems, cartTotal, updateQuantity, removeFromCart, cartCount } = useCart();
-      const navigate = useNavigate();
-      const [pickupTime, setPickupTime] = useState('');
+const CartPage = () => {
+  const { cartItems, cartTotal, updateQuantity, removeFromCart, cartCount } = useCart();
+  const [pickupTime, setPickupTime] = useState('');
 
-      const handlePlaceOrder = () => {
-        if (!pickupTime) {
-          alert('Please select a pickup time.');
-          return;
-        }
-        navigate('/order-confirmation');
+  // ✅ PAYMENT FUNCTION (NEW)
+  const handlePayment = async () => {
+    if (!pickupTime) {
+      alert('Please select a pickup time.');
+      return;
+    }
+
+    try {
+      // 🔹 Create order in backend
+      const res = await fetch("http://localhost:5000/api/payment/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: cartTotal }),
+      });
+
+      const order = await res.json();
+
+      // 🔹 Razorpay options
+      const options = {
+        key: "rzp_test_SVu1xxl1piYCFI", // 🔥 replace
+        amount: order.amount,
+        currency: "INR",
+        name: "Mellow Café",
+        description: "Food Order",
+        order_id: order.id,
+
+        handler: async function (response) {
+          try {
+            // 🔹 Verify payment + save order + generate invoice
+            const verifyRes = await fetch("http://localhost:5000/api/payment/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                ...response,
+                items: cartItems,
+                totalAmount: cartTotal,
+                userEmail: "testuser@example.com", // 🔥 replace with logged user
+                pickupTime
+              }),
+            });
+
+            const data = await verifyRes.json();
+
+            if (data.success) {
+              alert("Payment Successful 🎉");
+
+              // 🔥 OPEN INVOICE
+              window.open(data.invoiceUrl, "_blank");
+            } else {
+              alert("Payment verification failed ❌");
+            }
+
+          } catch (err) {
+            console.error(err);
+          }
+        },
+
+        theme: {
+          color: "#ef4444",
+        },
       };
 
-      const getPickupTimeOptions = () => {
-        const options = [];
-        const now = new Date();
-        for (let i = 1; i <= 4; i++) {
-          const pickupDate = new Date(now.getTime() + i * 60 * 60 * 1000);
-          options.push(pickupDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-        }
-        return options;
-      };
+      const rzp = new window.Razorpay(options);
+      rzp.open();
 
-      return (
-        <>
-          <Helmet>
-            <title>Your Cart - Mellow Café</title>
-            <meta name="description" content="Review your order and proceed to checkout." />
-          </Helmet>
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
-            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
-              <Link to="/" className="flex items-center gap-2 text-red-500 hover:text-red-700 font-semibold mb-8">
-                <ArrowLeft size={20} />
-                Continue Shopping
-              </Link>
-              <h1 className="text-4xl font-extrabold text-red-500 tracking-tight">Your Cart</h1>
-              <p className="mt-2 text-lg text-gray-600">{cartCount} items ready for you.</p>
-            </motion.div>
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
-            <div className="mt-12 lg:grid lg:grid-cols-12 lg:items-start lg:gap-x-12">
-              <section className="lg:col-span-7">
-                {cartItems.length === 0 ? (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16 border-2 border-dashed rounded-lg">
-                    <ShoppingBag className="mx-auto h-16 w-16 text-gray-400" />
-                    <h2 className="mt-4 text-2xl font-semibold text-gray-700">Your cart is empty</h2>
-                    <p className="mt-2 text-gray-500">Looks like you haven't added anything yet.</p>
-                    <Button asChild className="mt-6 bg-yellow-500 hover:bg-yellow-600 text-white">
-                      <Link to="/">Start Ordering</Link>
-                    </Button>
-                  </motion.div>
-                ) : (
-                  <Card>
-                    <CardContent className="p-0 divide-y">
-                      <AnimatePresence>
-                        {cartItems.map((item) => (
-                          <motion.div
-                            key={item.id}
-                            layout
-                            initial={{ opacity: 0, x: -50 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 50, transition: { duration: 0.3 } }}
-                            className="flex items-center justify-between p-4"
-                          >
-                            <div className="flex items-center gap-4">
-                              <div>
-                                <p className="font-semibold text-gray-800">{item.name}</p>
-                                <p className="text-sm text-gray-500">₹{item.price}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-4">
-                              <div className="flex items-center border rounded-md">
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
-                                  <Minus className="h-4 w-4" />
-                                </Button>
-                                <span className="w-8 text-center">{item.quantity}</span>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
-                                  <Plus className="h-4 w-4" />
-                                </Button>
-                              </div>
-                              <p className="font-semibold w-20 text-right">₹{item.price * item.quantity}</p>
-                              <Button variant="ghost" size="icon" className="text-gray-400 hover:text-red-500" onClick={() => removeFromCart(item.id)}>
-                                <Trash2 className="h-5 w-5" />
-                              </Button>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </AnimatePresence>
-                    </CardContent>
-                  </Card>
-                )}
-              </section>
+  // Pickup time options
+  const getPickupTimeOptions = () => {
+    const options = [];
+    const now = new Date();
+    for (let i = 1; i <= 4; i++) {
+      const pickupDate = new Date(now.getTime() + i * 60 * 60 * 1000);
+      options.push(pickupDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    }
+    return options;
+  };
 
-              {cartItems.length > 0 && (
-                <motion.section
-                  initial={{ opacity: 0, y: 50 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  className="mt-16 rounded-lg bg-gray-50 p-6 lg:col-span-5 lg:mt-0"
+  return (
+    <>
+      <Helmet>
+        <title>Your Cart - Mellow Café</title>
+      </Helmet>
+
+      <div className="container mx-auto px-4 py-12">
+
+        {/* HEADER */}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <Link to="/" className="flex items-center gap-2 text-red-500 mb-6">
+            <ArrowLeft size={20} /> Continue Shopping
+          </Link>
+
+          <h1 className="text-4xl font-bold text-red-500">Your Cart</h1>
+          <p className="text-gray-600">{cartCount} items</p>
+        </motion.div>
+
+        <div className="mt-10 grid lg:grid-cols-12 gap-8">
+
+          {/* CART ITEMS */}
+          <section className="lg:col-span-7">
+            {cartItems.length === 0 ? (
+              <div className="text-center py-16">
+                <ShoppingBag className="mx-auto h-16 w-16 text-gray-400" />
+                <h2 className="mt-4 text-xl">Cart is empty</h2>
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="divide-y p-0">
+                  <AnimatePresence>
+                    {cartItems.map(item => (
+                      <motion.div key={item.id} className="flex justify-between p-4">
+
+                        <div>
+                          <p className="font-semibold">{item.name}</p>
+                          <p>₹{item.price}</p>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <Button onClick={() => updateQuantity(item.id, item.quantity - 1)}>
+                            <Minus />
+                          </Button>
+
+                          {item.quantity}
+
+                          <Button onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+                            <Plus />
+                          </Button>
+
+                          <p>₹{item.price * item.quantity}</p>
+
+                          <Button onClick={() => removeFromCart(item.id)}>
+                            <Trash2 />
+                          </Button>
+                        </div>
+
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </CardContent>
+              </Card>
+            )}
+          </section>
+
+          {/* SUMMARY */}
+          {cartItems.length > 0 && (
+            <section className="lg:col-span-5 bg-gray-100 p-6 rounded">
+
+              <h2 className="text-lg font-semibold">Order Summary</h2>
+
+              <div className="mt-4 flex justify-between">
+                <span>Total</span>
+                <span>₹{cartTotal}</span>
+              </div>
+
+              {/* PICKUP TIME */}
+              <div className="mt-4">
+                <label>Pickup Time</label>
+                <select
+                  value={pickupTime}
+                  onChange={(e) => setPickupTime(e.target.value)}
+                  className="w-full mt-2 p-2 border rounded"
                 >
-                  <h2 className="text-lg font-medium text-gray-900">Order summary</h2>
-                  <div className="mt-6 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-gray-600">Subtotal</p>
-                      <p className="text-sm font-medium text-gray-900">₹{cartTotal}</p>
-                    </div>
-                    <div className="border-t border-gray-200 pt-4 flex items-center justify-between">
-                      <p className="text-base font-medium text-gray-900">Order total</p>
-                      <p className="text-base font-medium text-gray-900">₹{cartTotal}</p>
-                    </div>
-                    <div className="space-y-2 pt-4">
-                      <label htmlFor="pickup-time" className="block text-sm font-medium text-gray-700">Pickup Time</label>
-                      <select
-                        id="pickup-time"
-                        value={pickupTime}
-                        onChange={(e) => setPickupTime(e.target.value)}
-                        className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm rounded-md"
-                      >
-                        <option value="" disabled>Select a time</option>
-                        {getPickupTimeOptions().map(time => <option key={time} value={time}>{time}</option>)}
-                      </select>
-                      <p className="text-xs text-gray-500 mt-1">Please pick up your order within 4 hours of your selected time.</p>
-                    </div>
-                  </div>
-                  <Button onClick={handlePlaceOrder} disabled={!pickupTime} className="w-full mt-6 bg-red-500 hover:bg-red-600 text-white">
-                    Place Order
-                  </Button>
-                </motion.section>
-              )}
-            </div>
-          </div>
-        </>
-      );
-    };
+                  <option value="">Select time</option>
+                  {getPickupTimeOptions().map(t => (
+                    <option key={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
 
-    export default CartPage;
+              {/* 🔥 PAYMENT BUTTON */}
+              <Button
+                onClick={handlePayment}
+                className="w-full mt-6 bg-red-500 text-white"
+              >
+                Pay & Place Order
+              </Button>
+
+            </section>
+          )}
+
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default CartPage;

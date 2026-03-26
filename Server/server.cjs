@@ -1,17 +1,20 @@
+const dotenv = require('dotenv');
 const express = require('express');
 const mongoose = require('mongoose');
-const dotenv = require('dotenv');
+
 const cors = require('cors');
+const path = require('path'); // ✅ ADD THIS
+require("dotenv").config({
+  path: path.join(__dirname, ".env"),
+});
 const profileRoutes = require('./routes/profile_routes.cjs');
-
-
+const authRoutes = require('./routes/authroutes.cjs');
+const orderRoutes = require('./routes/order_routes.cjs');
+const paymentRoutes = require('./routes/paymentRoutes.cjs'); // ✅ ADD THIS
 
 dotenv.config();
 
 require('./config/firebaseAdmin.cjs');
-
-const authRoutes = require('./routes/authroutes.cjs');
-const orderRoutes = require('./routes/order_routes.cjs');
 
 const User = require('./models/User.cjs');
 
@@ -27,9 +30,16 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('Mongo error:', err));
 
+
+// ✅ ROUTES
 app.use('/api/auth', authRoutes);
 app.use('/api/order', orderRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/payment', paymentRoutes); // ✅ ADD THIS
+
+
+// ✅ SERVE INVOICE FILES (VERY IMPORTANT)
+app.use('/invoices', express.static(path.join(__dirname, 'invoices')));
 
 
 // Default admin
